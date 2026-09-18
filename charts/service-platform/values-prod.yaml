@@ -1,0 +1,106 @@
+nameOverride: ""
+fullnameOverride: clinical-api
+
+replicaCount: 2
+
+image:
+  repository: nginxinc/nginx-unprivileged
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+  port: 8080
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations:
+    app.utkrusht.io/audit-scope: clinical-encounter-signing
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+  annotations:
+    app.utkrusht.io/service-purpose: clinical-api
+
+config:
+  enabled: true
+  data:
+    APP_NAME: clinical-api
+    APP_ENV: production
+    AUDIT_MODE: append-only
+    ENCOUNTER_SIGNING: enabled
+    SUPPORT_WINDOW: weekday-hours
+
+health:
+  startup:
+    enabled: true
+    path: /
+    initialDelaySeconds: 2
+    periodSeconds: 5
+    failureThreshold: 12
+    timeoutSeconds: 2
+  readiness:
+    enabled: true
+    # nginx image in this chart responds on "/". Using a non-existent endpoint
+    # would keep pods unready and prevent stable rollouts.
+    path: /
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    failureThreshold: 3
+    timeoutSeconds: 2
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+security:
+  # Production must use restricted runtime expectations.
+  enabled: true
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    capabilities:
+      drop:
+        - ALL
+
+rollout:
+  maxSurge: 1
+  maxUnavailable: 0
+  minReadySeconds: 5
+  revisionHistoryLimit: 5
+
+nodeSelector: {}
+# Keep tolerations/affinity empty by default
+# (minikube has no taints).
+tolerations: []
+affinity: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+disruption:
+  enabled: true
+  minAvailable: 1
